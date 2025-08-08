@@ -4,38 +4,38 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
 // MongoDB connection
-  mongoose.connect('mongodb+srv://minttenprofessional:mzUERcyupdBHGWjv@cluster0.jlwqcdk.mongodb.net/communityDB', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 30000,
-  connectTimeoutMS: 30000,
-  socketTimeoutMS: 45000
+mongoose.connect('mongodb+srv://minttenprofessional:mzUERcyupdBHGWjv@cluster0.jlwqcdk.mongodb.net/communityDB', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
+    socketTimeoutMS: 45000
 })
 .then(() => console.log('Connected to MongoDB'))
 .catch((err) => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
 });
 
 app.get('/', (req, res) => {
-  const connectionStatus = mongoose.connection.readyState;
-  const statusMap = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting'
-  };
-  res.status(200).json({
-    message: 'API is running now',
-    mongoDBStatus: statusMap[connectionStatus] || 'unknown'
-  });
+    const connectionStatus = mongoose.connection.readyState;
+    const statusMap = {
+        0: 'disconnected',
+        1: 'connected',
+        2: 'connecting',
+        3: 'disconnecting'
+    };
+    res.status(200).json({
+        message: 'API is running now',
+        mongoDBStatus: statusMap[connectionStatus] || 'unknown'
+    });
 });
 
 // Community Event Schema
@@ -49,8 +49,6 @@ const eventSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
-const Event = mongoose.model('Event', eventSchema);
-
 // Community Suggestion Schema
 const suggestionSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
@@ -60,13 +58,26 @@ const suggestionSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
+const Event = mongoose.model('Event', eventSchema);
 const Suggestion = mongoose.model('Suggestion', suggestionSchema);
 
+// Middleware to validate ID
+const validateId = (req, res, next) => {
+    if (!req.body.id) {
+        return res.status(400).json({ error: 'id is required' });
+    }
+    next();
+};
+
 // CRUD for Events
-app.post('/api/events', async (req, res) => {
+app.post('/api/events', validateId, async (req, res) => {
     try {
-        const event = new Event(req.body);
-        await event.save();
+        const { id, ...rest } = req.body;
+        const event = await Event.findOneAndUpdate(
+            { id },
+            { $set: { id, ...rest } },
+            { upsert: true, new: true, runValidators: true }
+        );
         res.status(201).json(event);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -94,7 +105,11 @@ app.get('/api/events/:id', async (req, res) => {
 
 app.put('/api/events/:id', async (req, res) => {
     try {
-        const event = await Event.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+        const event = await Event.findOneAndUpdate(
+            { id: req.params.id },
+            { $set: req.body },
+            { new: true, runValidators: true }
+        );
         if (!event) return res.status(404).json({ error: 'Event not found' });
         res.json(event);
     } catch (error) {
@@ -113,10 +128,14 @@ app.delete('/api/events/:id', async (req, res) => {
 });
 
 // CRUD for Suggestions
-app.post('/api/suggestions', async (req, res) => {
+app.post('/api/suggestions', validateId, async (req, res) => {
     try {
-        const suggestion = new Suggestion(req.body);
-        await suggestion.save();
+        const { id, ...rest } = req.body;
+        const suggestion = await Suggestion.findOneAndUpdate(
+            { id },
+            { $set: { id, ...rest } },
+            { upsert: true, new: true, runValidators: true }
+        );
         res.status(201).json(suggestion);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -144,7 +163,11 @@ app.get('/api/suggestions/:id', async (req, res) => {
 
 app.put('/api/suggestions/:id', async (req, res) => {
     try {
-        const suggestion = await Suggestion.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+        const suggestion = await Suggestion.findOneAndUpdate(
+            { id: req.params.id },
+            { $set: req.body },
+            { new: true, runValidators: true }
+        );
         if (!suggestion) return res.status(404).json({ error: 'Suggestion not found' });
         res.json(suggestion);
     } catch (error) {
