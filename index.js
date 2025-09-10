@@ -49,7 +49,19 @@ app.get('/', (req, res) => {
         mongoDBStatus: statusMap[connectionStatus] || 'unknown'
     });
 });
+const uploadToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type: "auto" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
 
+    Readable.from(fileBuffer).pipe(stream);
+  });
+};
 // Community Event Schema
 const eventSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
@@ -216,17 +228,20 @@ app.post('/api/gallery', validateId, upload.single('image'), async (req, res) =>
         return res.status(400).json({ error: 'Description is required' });
     }
     try {
-        const uploadResult = await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-                { resource_type: 'image' },
-                (error, result) => {
-                    if (error) reject(error);
-                    else resolve(result);
-                }
-            );
-            stream.end(req.file.buffer);
-        });
-        const { secure_url, public_id } = uploadResult;
+    //     const uploadResult = await new Promise((resolve, reject) => {
+    //         const stream = cloudinary.uploader.upload_stream(
+    //             { resource_type: 'image' },
+    //             (error, result) => {
+    //                 if (error) reject(error);
+    //                 else resolve(result);
+    //             }
+    //         );
+    //         stream.end(req.file.buffer);
+    //     });
+        if (req.image) {
+      fileData = await uploadToCloudinary(req.image.buffer);
+    }
+        const { secure_url, public_id } = fileData;
         const { id, description } = req.body;
         const galleryItem = await Gallery.findOneAndUpdate(
             { id },
