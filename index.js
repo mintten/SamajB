@@ -220,7 +220,7 @@ app.delete('/api/suggestions/:id', async (req, res) => {
 });
 
 // CRUD for Gallery
-app.post('/api/gallery', validateId, upload.single('image'), async (req, res) => {
+app.post('/api/gallery', validateId, async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'Image is required' });
     }
