@@ -220,29 +220,29 @@ app.delete('/api/suggestions/:id', async (req, res) => {
 });
 
 // CRUD for Gallery
-app.post('/api/gallery', validateId, async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'Image is required' });
-    }
-    if (!req.body.description) {
-        return res.status(400).json({ error: 'Description is required' });
-    }
+app.post('/api/gallery', validateId, upload.single('image'), async (req, res) => {
     try {
-    //     const uploadResult = await new Promise((resolve, reject) => {
-    //         const stream = cloudinary.uploader.upload_stream(
-    //             { resource_type: 'image' },
-    //             (error, result) => {
-    //                 if (error) reject(error);
-    //                 else resolve(result);
-    //             }
-    //         );
-    //         stream.end(req.file.buffer);
-    //     });
-        if (req.image) {
-      fileData = await uploadToCloudinary(req.image.buffer);
-    }
-        const { secure_url, public_id } = fileData;
+        if (!req.file) {
+            return res.status(400).json({ error: 'Image is required' });
+        }
+        if (!req.body.description) {
+            return res.status(400).json({ error: 'Description is required' });
+        }
+        console.log('Uploading to Cloudinary...');
+        const uploadResult = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+                { resource_type: 'image' },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
+            stream.end(req.file.buffer);
+        });
+        console.log('Cloudinary upload result:', uploadResult);
+        const { secure_url, public_id } = uploadResult;
         const { id, description } = req.body;
+        console.log('Saving to MongoDB:', { id, description, secure_url, public_id });
         const galleryItem = await Gallery.findOneAndUpdate(
             { id },
             { $set: { id, description, imageUrl: secure_url, publicId: public_id } },
@@ -250,7 +250,8 @@ app.post('/api/gallery', validateId, async (req, res) => {
         );
         res.status(201).json(galleryItem);
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        console.error('Error in /api/gallery:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
