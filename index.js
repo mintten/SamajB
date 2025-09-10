@@ -220,14 +220,14 @@ app.delete('/api/suggestions/:id', async (req, res) => {
 });
 
 // CRUD for Gallery
-app.post('/api/gallery', validateId, upload.single('image'), async (req, res) => {
+app.post('/api/gallery', upload.single('image'), validateId, async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'Image is required' });
+    }
+    if (!req.body.description) {
+        return res.status(400).json({ error: 'Description is required' });
+    }
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Image is required' });
-        }
-        if (!req.body.description) {
-            return res.status(400).json({ error: 'Description is required' });
-        }
         console.log('Uploading to Cloudinary...');
         const uploadResult = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
