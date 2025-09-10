@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
 
 const app = express();
 const PORT = 3000;
@@ -9,6 +11,17 @@ const PORT = 3000;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Configure Cloudinary (replace with your actual credentials)
+cloudinary.config({
+    cloud_name: 'dmczkumpi',
+    api_key: '961697677923935',
+    api_secret: 'foYF_bQpkTUN4MaRZdd4DYVncmA'
+});
+
+// Multer setup for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://minttenprofessional:mzUERcyupdBHGWjv@cluster0.jlwqcdk.mongodb.net/communityDB', {
@@ -58,8 +71,18 @@ const suggestionSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
+// Gallery Schema
+const gallerySchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    description: { type: String, required: true },
+    imageUrl: { type: String, required: true },
+    publicId: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const Event = mongoose.model('Event', eventSchema);
 const Suggestion = mongoose.model('Suggestion', suggestionSchema);
+const Gallery = mongoose.model('Gallery', gallerySchema);
 
 // Middleware to validate ID
 const validateId = (req, res, next) => {
@@ -180,6 +203,71 @@ app.delete('/api/suggestions/:id', async (req, res) => {
         const suggestion = await Suggestion.findOneAndDelete({ id: req.params.id });
         if (!suggestion) return res.status(404).json({ error: 'Suggestion not found' });
         res.json({ message: 'Suggestion deleted' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// CRUD for Gallery
+app.post('/api/gallery', validateId, upload.single('image'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'Image is required' });
+    }
+    if (!req.body.description) {
+        return res.status(400).json({ error: 'Description is required' });
+    }
+    try {
+        const uploadResult = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+                { resource_type: 'image' },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
+            stream.end(req.file.buffer);
+        });
+        const { secure_url, public_id } = uploadResult;
+        const { id, description } = req.body;
+        const galleryItem = await Gallery.findOneAndUpdate(
+            { id },
+            { $set: { id, description, imageUrl: secure_url, publicId: public_id } },
+            { upsert: true, new: true, runValidators: true }
+        );
+        res.status(201).json(galleryItem);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.get('/api/gallery', async (req, res) => {
+    try {
+        const items = await Gallery.find();
+        res.json(items);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/gallery/:id', async (req, res) => {
+    try {
+        const item = await Gallery.findOne({ id: req.params.id });
+        if (!item) return res.status(404).json({ error: 'Gallery item not found' });
+        res.json(item);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/gallery/:id', async (req, res) => {
+    try {
+        const item = await Gallery.findOne({ id: req.params.id });
+        if (!item) return res.status(404).json({ error: 'Gallery item not found' });
+        // Delete from Cloudinary
+        await cloudinary.uploader.destroy(item.publicId);
+        // Delete from DB
+        await Gallery.deleteOne({ id: req.params.id });
+        res.json({ message: 'Gallery item deleted' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
